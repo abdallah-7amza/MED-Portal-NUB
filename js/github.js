@@ -1,57 +1,69 @@
 /* ======================================================================= */
 /* FILE: js/github.js                                                      */
-/* PURPOSE: Handles all communication with the GitHub API.                 */
-/* VERSION: 2.0 - Optimized for direct raw content fetching.               */
+/* VERSION: 4.0 - Automated Discovery Model                                */
 /* ======================================================================= */
-
 class GitHubService {
     constructor(repo) {
-        this.repo = repo; // e.g., "abdallah-7amza/MED-Portal-NUB"
+        this.repo = repo;
         this.apiBase = `https://api.github.com/repos/${repo}`;
-        // This is the crucial part: we will build direct links to the raw content.
         this.rawBase = `https://raw.githubusercontent.com/${repo}/main`;
     }
 
     /**
-     * Fetches directory contents from a given path in the repository.
-     * This is used to discover what folders/files exist.
-     * @param {string} path - The path to fetch, e.g., 'lessons' or 'lessons/fifth-year'.
-     * @returns {Promise<Array>} A promise that resolves to an array of directory items.
+     * Fetches the entire file tree for the repository using the Git Trees API.
+     * This is the core function for automated content discovery.
+     * @returns {Promise<Array>} A promise that resolves to a structured list of all lesson files.
      */
-    async getContents(path = '') {
-        const url = `${this.apiBase}/contents/${path}`;
+    async getAllLessons() {
+        // This single API call gets a list of all files in the repository.
+        const apiUrl = `${this.apiBase}/git/trees/main?recursive=1`;
         try {
-            // We add a cache-busting parameter to ensure we get the latest directory listing
-            const response = await fetch(`${url}?t=${new Date().getTime()}`);
-            if (response.status === 404) return []; // Not found is not an error, just an empty folder.
-            if (!response.ok) throw new Error(`GitHub API error: ${response.status}`);
-            
+            const response = await fetch(apiUrl);
+            if (!response.ok) {
+                throw new Error(`GitHub API request failed: ${response.statusText}`);
+            }
             const data = await response.json();
-            // Ensure the response is an array before returning
-            return Array.isArray(data) ? data : [];
+            
+            // Process the flat file list into a structured lesson object
+            const lessonFiles = data.tree
+                .filter(file => file.path.startsWith('lessons/') && file.path.endsWith('.md'))
+                .map(file => {
+                    const pathParts = file.path.split('/'); // e.g., ['lessons', 'fifth-year', 'pediatrics', 'neonatal-jaundice.md']
+                    if (pathParts.length < 4) return null; // Ensure the structure is valid (lessons/year/branch/file.md)
+
+                    const year = pathParts[1];
+                    const branch = pathParts[2];
+                    const fileName = pathParts[3];
+                    const lessonId = fileName.replace('.md', '');
+                    const title = lessonId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    
+                    return { path: file.path, title, year, branch, id: lessonId };
+                })
+                .filter(Boolean); // Remove any null entries from invalid paths
+
+            return lessonFiles;
         } catch (error) {
-            console.error(`Failed to fetch contents from path: ${path}`, error);
-            return []; // Return empty array on failure to prevent the site from crashing.
+            console.error("Error fetching lesson tree:", error);
+            return [];
         }
     }
 
     /**
-     * Fetches the raw text content of a file using a direct URL.
-     * This is more reliable than using the API for file content.
+     * Fetches the raw text content of a file.
      * @param {string} path - The full path to the file, e.g., 'lessons/year/branch/lesson.md'.
-     * @returns {Promise<string>} A promise that resolves to the file content as text.
+     * @returns {Promise<string>} The file content as text.
      */
     async getRawFile(path) {
         const url = `${this.rawBase}/${path}`;
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to fetch raw file from ${url}. Status: ${response.status}`);
+        if (!response.ok) throw new Error(`Failed to fetch raw file: ${path}`);
         return await response.text();
     }
 
     /**
-     * Fetches and parses a JSON file using the direct raw URL method.
+     * Fetches the JSON content for a lesson's quiz/flashcards.
      * @param {string} path - The full path to the JSON file.
-     * @returns {Promise<Object>} A promise that resolves to the parsed JSON object.
+     * @returns {Promise<Object>} The parsed JSON object.
      */
     async getJsonFile(path) {
         const content = await this.getRawFile(path);
