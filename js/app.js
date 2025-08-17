@@ -1,31 +1,25 @@
+
 /* ======================================================================= */
 /* FILE: js/app.js                                                         */
+/* VERSION: 3.0 - Automated Discovery Model                                */
 /* ======================================================================= */
 document.addEventListener('DOMContentLoaded', () => {
-    const GITHUB_REPO = 'abdallah-7amza/MED-Portal-NUB';
+    // Using the correct repository name from your code.
+    const GITHUB_REPO = 'abdallah-7amza/medical-platform'; 
     const github = new GitHubService(GITHUB_REPO);
     const params = new URLSearchParams(window.location.search);
 
-    // --- THEME MANAGEMENT ---
+    // --- THEME MANAGEMENT (No changes) ---
     const themeToggle = document.getElementById('theme-toggle');
     const lightIcon = document.getElementById('theme-icon-light');
     const darkIcon = document.getElementById('theme-icon-dark');
-
     const applyTheme = (theme) => {
-        if (theme === 'dark') {
-            document.body.classList.add('dark-mode');
-            if(lightIcon) lightIcon.style.display = 'none';
-            if(darkIcon) darkIcon.style.display = 'block';
-        } else {
-            document.body.classList.remove('dark-mode');
-            if(lightIcon) lightIcon.style.display = 'block';
-            if(darkIcon) darkIcon.style.display = 'none';
-        }
+        document.body.classList.toggle('dark-mode', theme === 'dark');
+        if (lightIcon) lightIcon.style.display = theme === 'dark' ? 'none' : 'block';
+        if (darkIcon) darkIcon.style.display = theme === 'dark' ? 'block' : 'none';
     };
-
     const currentTheme = localStorage.getItem('theme') || 'light';
     applyTheme(currentTheme);
-
     if (themeToggle) {
         themeToggle.addEventListener('click', () => {
             const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
@@ -34,59 +28,69 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- PAGE-SPECIFIC LOGIC ---
+    // --- AUTOMATED PAGE LOGIC ---
     const path = window.location.pathname;
 
-    if (path.endsWith('branches.html')) {
-        const year = params.get('year');
-        if (year) loadBranches(year);
-    } else if (path.endsWith('lessons-list.html')) {
-        const year = params.get('year');
-        const branch = params.get('branch');
-        if (year && branch) loadLessons(year, branch);
-    }
+    async function initializePage() {
+        // The homepage is static, so we only need dynamic logic for other pages.
+        if (path.endsWith('/') || path.endsWith('index.html')) return;
 
-    // --- DATA LOADING FUNCTIONS ---
-    async function loadBranches(year) {
-        document.getElementById('year-title').textContent = `${formatName(year)} Branches`;
-        const grid = document.getElementById('branches-grid');
-        const contents = await github.getContents(`lessons/${year}`);
-        const branches = contents.filter(item => item.type === 'dir');
-        renderCards(grid, branches, (branch) => `lessons-list.html?year=${year}&branch=${branch.name}`);
-    }
+        try {
+            // Fetch all lessons once and build pages from this data.
+            const allLessons = await github.getAllLessons();
 
-    async function loadLessons(year, branch) {
-        document.getElementById('branch-title').textContent = `Lessons in ${formatName(branch)}`;
-        document.getElementById('back-to-branches-link').href = `branches.html?year=${year}`;
-        const grid = document.getElementById('lessons-grid');
-        const contents = await github.getContents(`lessons/${year}/${branch}`);
-        const lessons = contents.filter(item => item.name.endsWith('.md'));
-        
-        const lessonData = lessons.map(lesson => ({
-            name: lesson.name.replace('.md', ''),
-            path: `lesson.html?year=${year}&branch=${branch}&lesson=${lesson.name.replace('.md', '')}`
-        }));
+            if (path.endsWith('branches.html')) {
+                const yearId = params.get('year');
+                if (yearId) {
+                    // Find all unique branch names for the selected year
+                    const branchesForYear = [...new Set(allLessons
+                        .filter(lesson => lesson.year === yearId)
+                        .map(lesson => lesson.branch)
+                    )];
+                    
+                    document.getElementById('year-title').textContent = `${formatName(yearId)} Branches`;
+                    const grid = document.getElementById('branches-grid');
+                    const branchData = branchesForYear.map(branchId => ({ name: branchId }));
+                    renderCards(grid, branchData, (branch) => `lessons-list.html?year=${yearId}&branch=${branch.name}`);
+                }
+            } else if (path.endsWith('lessons-list.html')) {
+                const yearId = params.get('year');
+                const branchId = params.get('branch');
 
-        renderCards(grid, lessonData, (lesson) => lesson.path);
-
-        const searchBar = document.getElementById('search-bar');
-        searchBar.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            const filteredLessons = lessonData.filter(lesson => lesson.name.replace(/-/g, ' ').includes(query));
-            renderCards(grid, filteredLessons, (lesson) => lesson.path);
-        });
+                if (yearId && branchId) {
+                    // Filter the master list to get only the lessons for this specific branch
+                    const lessonsForBranch = allLessons.filter(lesson => lesson.year === yearId && lesson.branch === branchId);
+                    
+                    document.getElementById('branch-title').textContent = `Lessons in ${formatName(branchId)}`;
+                    document.getElementById('back-to-branches-link').href = `branches.html?year=${yearId}`;
+                    const grid = document.getElementById('lessons-grid');
+                    renderCards(grid, lessonsForBranch, (lesson) => `lesson.html?year=${yearId}&branch=${branchId}&lesson=${lesson.id}`);
+                    
+                    // Search functionality
+                    const searchBar = document.getElementById('search-bar');
+                    searchBar.addEventListener('input', (e) => {
+                        const query = e.target.value.toLowerCase();
+                        const filteredLessons = lessonsForBranch.filter(lesson => lesson.title.toLowerCase().includes(query));
+                        renderCards(grid, filteredLessons, (lesson) => `lesson.html?year=${yearId}&branch=${branchId}&lesson=${lesson.id}`);
+                    });
+                }
+            }
+        } catch (error) {
+            console.error("Initialization Error:", error);
+            document.querySelector('main .container').innerHTML = `<p class="error-message">Could not load site content from GitHub.</p>`;
+        }
     }
 
     // --- UTILITY FUNCTIONS ---
     function renderCards(grid, items, urlBuilder) {
         if (!grid) return;
-        if (items.length === 0) {
+        if (!items || items.length === 0) {
             grid.innerHTML = '<p class="message-box">No content has been added to this section yet.</p>';
             return;
         }
         grid.innerHTML = items.map(item => `
             <a href="${urlBuilder(item)}" class="card">
-                <h3>${formatName(item.name)}</h3>
+                <h3>${item.title || formatName(item.name)}</h3>
             </a>
         `).join('');
     }
@@ -94,4 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatName(name) {
         return name.replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
     }
+
+    initializePage();
 });
