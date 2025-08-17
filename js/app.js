@@ -1,137 +1,182 @@
-/**
- * Main Application Logic for NUB Med Portal
- * Handles navigation and view rendering
- * 
- * Prepared by Abdallah Hamza
- */
-
-import githubService from './github.js';
-
+// js/app.js
 document.addEventListener('DOMContentLoaded', () => {
-    // DOM elements
-    const views = {
-        year: document.getElementById('year-view'),
-        subject: document.getElementById('subject-view'),
-        topic: document.getElementById('topic-view'),
-        subjectTitle: document.getElementById('subject-view-title'),
-        topicTitle: document.getElementById('topic-view-title'),
-        subjectGrid: document.getElementById('subject-grid'),
-        topicGrid: document.getElementById('topic-grid')
-    };
+    // DOM Elements
+    const views = document.querySelectorAll('.view');
+    const yearGrid = document.getElementById('year-grid');
+    const subjectGrid = document.getElementById('subject-grid');
+    const topicGrid = document.getElementById('topic-grid');
+    const subjectTitle = document.getElementById('subject-view-title');
+    const topicTitle = document.getElementById('topic-view-title');
     
     // Navigation state
-    let currentState = {
-        year: null,
-        subject: null
+    let navigationStack = [];
+    let currentYear = null;
+    let currentSubject = null;
+    
+    // Mock data for subjects and topics
+    const subjectsData = {
+        'first-year': [
+            { id: 'anatomy', title: 'Anatomy' },
+            { id: 'physiology', title: 'Physiology' },
+            { id: 'biochemistry', title: 'Biochemistry' }
+        ],
+        'second-year': [
+            { id: 'pharmacology', title: 'Pharmacology' },
+            { id: 'microbiology', title: 'Microbiology' },
+            { id: 'pathology', title: 'Pathology' }
+        ],
+        'third-year': [
+            { id: 'medicine', title: 'Internal Medicine' },
+            { id: 'surgery', title: 'Surgery' },
+            { id: 'pediatrics', title: 'Pediatrics' }
+        ],
+        'fourth-year': [
+            { id: 'obstetrics', title: 'Obstetrics' },
+            { id: 'gynecology', title: 'Gynecology' },
+            { id: 'psychiatry', title: 'Psychiatry' }
+        ],
+        'fifth-year': [
+            { id: 'pediatrics', title: 'Pediatrics' },
+            { id: 'obgyn', title: 'OB/GYN' },
+            { id: 'psychiatry', title: 'Psychiatry' },
+            { id: 'family-medicine', title: 'Family Medicine' },
+            { id: 'community-medicine', title: 'Community Medicine' }
+        ]
+    };
+    
+    const topicsData = {
+        'pediatrics': [
+            { id: 'hematology', title: 'Hematology' },
+            { id: 'neonatology', title: 'Neonatology' },
+            { id: 'infectious-diseases', title: 'Infectious Diseases' }
+        ],
+        'obgyn': [
+            { id: 'obstetrics', title: 'Obstetrics' },
+            { id: 'gynecology', title: 'Gynecology' },
+            { id: 'infertility', title: 'Infertility' }
+        ],
+        'psychiatry': [
+            { id: 'depression', title: 'Depression' },
+            { id: 'anxiety', title: 'Anxiety Disorders' },
+            { id: 'psychosis', title: 'Psychotic Disorders' }
+        ],
+        'family-medicine': [
+            { id: 'diabetes', title: 'Diabetes' },
+            { id: 'hypertension', title: 'Hypertension' },
+            { id: 'asthma', title: 'Asthma' }
+        ],
+        'community-medicine': [
+            { id: 'epidemiology', title: 'Epidemiology' },
+            { id: 'biostatistics', title: 'Biostatistics' },
+            { id: 'public-health', title: 'Public Health' }
+        ]
     };
     
     // Initialize the application
     init();
     
-    async function init() {
+    function init() {
         // Add event listeners
         setupEventListeners();
         
         // Show initial view
-        showView('year');
+        showView('year-view');
     }
     
     function setupEventListeners() {
         // Year selection
-        document.querySelectorAll('#year-grid .card').forEach(card => {
-            card.addEventListener('click', async () => {
-                const year = card.dataset.year;
-                currentState.year = year;
-                
-                // Fetch subjects for selected year
-                const subjects = await githubService.getSubjects(year);
-                if (subjects.length === 0) {
-                    views.subjectGrid.innerHTML = '<p class="no-content">No subjects available for this year</p>';
-                } else {
-                    renderSubjects(subjects);
-                }
-                
-                views.subjectTitle.textContent = `Subjects for ${year.replace('-', ' ')}`;
-                showView('subject');
-            });
+        yearGrid.addEventListener('click', (e) => {
+            const card = e.target.closest('.card');
+            if (!card) return;
+            
+            const year = card.dataset.year;
+            showSubjects(year);
         });
         
         // Subject selection
-        document.querySelector('#subject-grid').addEventListener('click', async (e) => {
+        subjectGrid.addEventListener('click', (e) => {
             const card = e.target.closest('.card');
             if (!card) return;
             
             const subject = card.dataset.subjectId;
-            currentState.subject = subject;
-            
-            // Fetch topics for selected subject
-            const topics = await githubService.getTopics(currentState.year, subject);
-            if (topics.length === 0) {
-                views.topicGrid.innerHTML = '<p class="no-content">No topics available for this subject</p>';
-            } else {
-                renderTopics(topics);
-            }
-            
-            views.topicTitle.textContent = `Topics for ${subject.replace(/-/g, ' ')}`;
-            showView('topic');
+            showTopics(currentYear, subject);
         });
         
         // Topic selection
-        document.querySelector('#topic-grid').addEventListener('click', async (e) => {
+        topicGrid.addEventListener('click', (e) => {
             const card = e.target.closest('.card');
             if (!card) return;
             
             const topic = card.dataset.topicId;
-            navigateToLesson(currentState.year, currentState.subject, topic);
+            navigateToLesson(currentYear, currentSubject, topic);
         });
         
-        // Back button in lesson.html
-        if (document.getElementById('back-to-topics-btn')) {
-            document.getElementById('back-to-topics-btn').addEventListener('click', () => {
-                history.back();
+        // Back buttons
+        document.querySelectorAll('.back-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetView = btn.dataset.target;
+                navigateBack(targetView);
             });
-        }
-    }
-    
-    function renderSubjects(subjects) {
-        views.subjectGrid.innerHTML = subjects.map(subject => `
-            <div class="card" data-subject-id="${subject.id}">
-                <h3>${subject.title}</h3>
-                <p>Click to view topics</p>
-            </div>
-        `).join('');
-    }
-    
-    function renderTopics(topics) {
-        views.topicGrid.innerHTML = topics.map(topic => `
-            <div class="card" data-topic-id="${topic.id}">
-                <h3>${topic.title}</h3>
-                <p>Click to view lesson</p>
-            </div>
-        `).join('');
-    }
-    
-    function showView(viewName) {
-        // Hide all views
-        Object.values(views).forEach(view => {
-            if (view.classList) view.classList.remove('active');
         });
-        
-        // Show selected view
-        if (views[viewName]) views[viewName].classList.add('active');
-        
-        // Scroll to top
+    }
+    
+    function showView(viewId) {
+        views.forEach(view => view.classList.remove('active'));
+        const newView = document.getElementById(viewId);
+        newView.classList.add('active');
         window.scrollTo(0, 0);
     }
     
-    function navigateToLesson(year, subject, topic) {
-        // Encode parameters for URL
-        const params = new URLSearchParams();
-        params.set('year', year);
-        params.set('subject', subject);
-        params.set('topic', topic);
+    function showSubjects(year) {
+        currentYear = year;
+        const subjects = subjectsData[year] || [];
         
-        // Navigate to lesson page
-        window.location.href = `lesson.html?${params.toString()}`;
+        subjectTitle.textContent = `Subjects for ${year.replace('-', ' ')}`;
+        subjectGrid.innerHTML = subjects.map(subject => `
+            <div class="card" data-subject-id="${subject.id}">
+                <h3>${subject.title}</h3>
+            </div>
+        `).join('');
+        
+        navigationStack.push({ viewId: 'subject-view', year });
+        showView('subject-view');
+    }
+    
+    function showTopics(year, subject) {
+        currentSubject = subject;
+        const topics = topicsData[subject] || [];
+        
+        topicTitle.textContent = `Topics for ${subject.replace('-', ' ')}`;
+        topicGrid.innerHTML = topics.map(topic => `
+            <div class="card" data-topic-id="${topic.id}">
+                <h3>${topic.title}</h3>
+            </div>
+        `).join('');
+        
+        navigationStack.push({ viewId: 'topic-view', year, subject });
+        showView('topic-view');
+    }
+    
+    function navigateToLesson(year, subject, topic) {
+        // Navigate to lesson page with parameters
+        window.location.href = `lesson.html?year=${year}&subject=${subject}&topic=${topic}`;
+    }
+    
+    function navigateBack(targetView) {
+        // Pop the current view from the stack
+        navigationStack.pop();
+        
+        // Get the previous view
+        const previousView = navigationStack[navigationStack.length - 1];
+        
+        if (previousView) {
+            if (previousView.viewId === 'subject-view') {
+                showSubjects(previousView.year);
+            } else if (previousView.viewId === 'topic-view') {
+                showTopics(previousView.year, previousView.subject);
+            }
+        } else {
+            showView('year-view');
+        }
     }
 });
