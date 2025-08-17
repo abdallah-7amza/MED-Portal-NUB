@@ -3,44 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Loading Lesson...</title>
+    <title>Lesson - NUB Med Portal</title>
     <link rel="stylesheet" href="../assets/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <header>
-        <h1 id="lesson-title">Loading...</h1>
+    <header class="site-header">
+        <h1>NUB Med Portal</h1>
     </header>
+
     <main>
         <div class="container">
-            <a id="back-to-lessons-link" href="index.html" class="back-link">&larr; Back to lessons</a>
-
-            <div class="tabs">
-                <button class="tab-link active" data-tab="lesson-tab">Lesson</button>
-                <button class="tab-link" data-tab="quiz-tab">MCQs</button>
-                <button class="tab-link" data-tab="flashcards-tab">Flashcards</button>
-            </div>
-
-            <div id="lesson-tab" class="tab-content active">
-                <div id="lesson-body-skeleton" class="skeleton-loader"><p>Loading lesson content...</p></div>
-                <article id="lesson-body"></article>
-            </div>
-
-            <div id="quiz-tab" class="tab-content">
-                <div id="quiz-body-skeleton" class="skeleton-loader"><p>Loading quiz...</p></div>
-                <section id="quiz-container"></section>
-            </div>
-
-            <div id="flashcards-tab" class="tab-content">
-                <div id="flashcards-body-skeleton" class="skeleton-loader"><p>Loading flashcards...</p></div>
-                <section id="flashcards-container"></section>
+            <button id="back-to-topics-btn" class="back-btn">&larr; Back to Topics</button>
+            
+            <div id="lesson-header" class="lesson-header">
+                <h2 id="lesson-title">Loading Lesson...</h2>
             </div>
             
-            </div>
+            <article id="lesson-content">
+                <div id="lesson-body-skeleton" class="skeleton-loader">
+                    <p>Loading lesson content...</p>
+                </div>
+            </article>
+
+            <section id="quiz-container"></section>
+        </div>
     </main>
-    
+
+    <footer class="site-footer">
+        Prepared by Abdallah Hamza
+    </footer>
+
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="../js/github.js"></script> 
-    <script src="../js/ai.js"></script> 
-    <script src="../js/lesson.js"></script> 
+    <script src="../js/github.js"></script>
+    <script src="../js/lesson.js"></script>
+    <script src="../js/ai.js"></script>
 </body>
 </html>
