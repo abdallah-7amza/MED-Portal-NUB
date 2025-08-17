@@ -1,0 +1,51 @@
+{
+  "mcqs": [
+    {
+      "stem": "A 3-day-old, full-term infant has a total serum bilirubin of 14 mg/dL. The infant is exclusively breastfed and appears healthy. Jaundice was first noted at 36 hours of life. What is the most likely diagnosis?",
+      "options": [
+        "Pathological jaundice due to ABO incompatibility",
+        "Physiological jaundice",
+        "Biliary atresia",
+        "Jaundice due to sepsis"
+      ],
+      "answerIndex": 1,
+      "explanation": "The onset after 24 hours, the peak around day 3, and the bilirubin level are all consistent with physiological jaundice, which is common in breastfed infants."
+    },
+    {
+      "stem": "Which of the following findings is the strongest indicator of PATHOLOGICAL jaundice in a newborn?",
+      "options": [
+        "Jaundice appearing at 48 hours of age",
+        "A total bilirubin of 12 mg/dL on day 4",
+        "Jaundice appearing at 12 hours of age",
+        "Yellow skin discoloration limited to the face"
+      ],
+      "answerIndex": 2,
+      "explanation": "Jaundice appearing within the first 24 hours of life is always considered pathological and requires immediate investigation to rule out serious causes like hemolysis or sepsis."
+    },
+    {
+      "stem": "What is the mechanism of action of phototherapy in treating neonatal hyperbilirubinemia?",
+      "options": [
+        "It accelerates the maturation of the UGT enzyme",
+        "It binds to bilirubin in the gut to prevent reabsorption",
+        "It converts unconjugated bilirubin into excretable photoisomers",
+        "It stimulates the liver to produce more bile"
+      ],
+      "answerIndex": 2,
+      "explanation": "Phototherapy uses a specific wavelength of light to cause structural isomerization of the unconjugated bilirubin molecule, converting it into a water-soluble form that can be excreted in urine and bile without needing liver conjugation."
+    }
+  ],
+  "flashcards": [
+    {
+      "front": "What is Kernicterus?",
+      "back": "A rare but devastating form of brain damage caused by the deposition of unconjugated bilirubin in the basal ganglia and brainstem nuclei."
+    },
+    {
+      "front": "A direct (conjugated) bilirubin level greater than what value is always considered pathological?",
+      "back": "> 2 mg/dL or > 20% of the total serum bilirubin."
+    },
+    {
+      "front": "What is the primary risk factor for severe hyperbilirubinemia?",
+      "back": "Jaundice in the first 24 hours of life."
+    }
+  ]
+}
