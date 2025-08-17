@@ -3,49 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MED-Portal - Select Your Year</title>
+    <title>NUB Med Portal - Medical Education Platform</title>
     <link rel="stylesheet" href="assets/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <header class="site-header">
-        <div class="container">
-            <h1>MED-Portal</h1>
-        </div>
+        <h1>NUB Med Portal</h1>
+        <p>Comprehensive Medical Education Platform</p>
     </header>
 
-    <main>
-        <div class="container">
-            <h2 class="page-title">Select Your Academic Year</h2>
-            <div id="years-grid" class="card-grid year-grid">
-                <a href="#" class="card disabled">
+    <main id="app-container">
+        <!-- Year Selection View -->
+        <section id="year-view" class="view active">
+            <h2 class="view-title">Select Academic Year</h2>
+            <div id="year-grid" class="card-grid">
+                <div class="card" data-year="first-year">
                     <h3>First Year</h3>
-                    <p>Content Coming Soon</p>
-                </a>
-                <a href="#" class="card disabled">
+                    <p>Basic Medical Sciences</p>
+                </div>
+                <div class="card" data-year="second-year">
                     <h3>Second Year</h3>
-                    <p>Content Coming Soon</p>
-                </a>
-                <a href="#" class="card disabled">
+                    <p>Anatomy & Physiology</p>
+                </div>
+                <div class="card" data-year="third-year">
                     <h3>Third Year</h3>
-                    <p>Content Coming Soon</p>
-                </a>
-                <a href="#" class="card disabled">
+                    <p>Pathology & Pharmacology</p>
+                </div>
+                <div class="card" data-year="fourth-year">
                     <h3>Fourth Year</h3>
-                    <p>Content Coming Soon</p>
-                </a>
-                <a href="branches.html?year=fifth-year" class="card">
+                    <p>Clinical Rotations</p>
+                </div>
+                <div class="card" data-year="fifth-year">
                     <h3>Fifth Year</h3>
-                    <p>View Available Branches</p>
-                </a>
+                    <p>Advanced Clinical Studies</p>
+                </div>
             </div>
-        </div>
+        </section>
+
+        <!-- Subject Selection View -->
+        <section id="subject-view" class="view">
+            <button class="back-btn" data-target="year-view">&larr; Back to Years</button>
+            <h2 id="subject-view-title" class="view-title">Select Subject</h2>
+            <div id="subject-grid" class="card-grid">
+                <!-- Subjects will be injected here -->
+            </div>
+        </section>
+
+        <!-- Topic Selection View -->
+        <section id="topic-view" class="view">
+            <button class="back-btn" data-target="subject-view">&larr; Back to Subjects</button>
+            <h2 id="topic-view-title" class="view-title">Select Topic</h2>
+            <div id="topic-grid" class="card-grid">
+                <!-- Topics will be injected here -->
+            </div>
+        </section>
     </main>
 
     <footer class="site-footer">
-        <p>By Abdallah Hamza</p>
+        Prepared by Abdallah Hamza
     </footer>
+
+    <script src="js/github.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
