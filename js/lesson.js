@@ -1,20 +1,52 @@
 /* ======================================================================= */
 /* FILE: js/lesson.js                                                      */
-/* PURPOSE: Handles all logic for the lesson page, including tabs,         */
-/* rendering content, quizzes, and flashcards.                             */
-/* VERSION: 3.0 - Full Feature Implementation                              */
+/* PURPOSE: Handles all logic for the lesson page with robust error handling.*/
+/* VERSION: 4.0 - Defensive Programming Implementation                     */
 /* ======================================================================= */
 
 document.addEventListener('DOMContentLoaded', () => {
     // This script only runs on the lesson page
     if (!window.location.pathname.endsWith('lesson.html')) return;
 
+    /**
+     * Pre-flight check to ensure all required DOM elements exist before running any logic.
+     * This prevents the script from crashing due to a missing element in the HTML.
+     * @returns {boolean} - True if all checks pass, false otherwise.
+     */
+    function runPreflightChecks() {
+        const requiredElementIds = [
+            'lesson-title', 'lesson-body', 'lesson-body-skeleton',
+            'quiz-container', 'quiz-body-skeleton', 'flashcards-container',
+            'flashcards-body-skeleton', 'back-to-lessons-link'
+        ];
+        const missingElements = requiredElementIds.filter(id => !document.getElementById(id));
+
+        if (missingElements.length > 0) {
+            console.error("CRITICAL ERROR: The following required HTML elements are missing from lesson.html:", missingElements);
+            document.body.innerHTML = `<div class="error-message-critical"><strong>Site Configuration Error:</strong> A critical component of the page is missing. Please contact the administrator. Missing elements: ${missingElements.join(', ')}</div>`;
+            return false; // Stop execution
+        }
+
+        if (typeof marked === 'undefined') {
+            console.error("CRITICAL ERROR: The 'marked' library (for Markdown rendering) failed to load. Check the CDN link in lesson.html.");
+            document.body.innerHTML = `<div class="error-message-critical"><strong>Site Configuration Error:</strong> A required external library failed to load. The lesson cannot be displayed.</div>`;
+            return false;
+        }
+        
+        return true; // All checks passed
+    }
+
+    // Run checks immediately. If they fail, halt the entire script.
+    if (!runPreflightChecks()) {
+        return;
+    }
+
     // --- CONFIGURATION & INITIALIZATION ---
     const GITHUB_REPO = 'abdallah-7amza/MED-Portal-NUB';
     const github = new GitHubService(GITHUB_REPO);
     const aiTutor = new AITutor();
 
-    // --- DOM ELEMENTS ---
+    // --- DOM ELEMENTS (already verified by pre-flight check) ---
     const lessonTitleEl = document.getElementById('lesson-title');
     const lessonBodyEl = document.getElementById('lesson-body');
     const lessonBodySkeleton = document.getElementById('lesson-body-skeleton');
@@ -27,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabContents = document.querySelectorAll('.tab-content');
 
     // --- STATE ---
-    let lessonData = {}; // Will hold all data for the current lesson
+    let lessonData = {};
     let quizState = { currentQuestionIndex: 0, userAnswers: [], score: 0, isFinished: false };
     let flashcardState = { currentCardIndex: 0 };
 
@@ -40,6 +72,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (lessonData.year && lessonData.branch && lessonData.lessonName) {
         backLink.href = `lessons-list.html?year=${lessonData.year}&branch=${lessonData.branch}`;
         loadContent();
+    } else {
+        lessonBodyEl.innerHTML = `<p class="error-message">Error: Missing lesson parameters in the URL. Please navigate from the lessons list.</p>`;
+        lessonBodySkeleton.style.display = 'none';
+        quizBodySkeleton.style.display = 'none';
+        flashcardsBodySkeleton.style.display = 'none';
     }
 
     // --- EVENT LISTENERS ---
@@ -58,9 +95,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const lessonPath = `lessons/${lessonData.year}/${lessonData.branch}/${lessonData.lessonName}.md`;
             const quizPath = `questions/${lessonData.year}/${lessonData.branch}/${lessonData.lessonName}.json`;
             
+            console.log(`Fetching lesson from: ${lessonPath}`);
+            console.log(`Fetching quiz from: ${quizPath}`);
+
             const [lessonMd, quizJson] = await Promise.all([
                 github.getRawFile(lessonPath),
-                github.getJsonFile(quizPath).catch(() => ({})) // Gracefully fail if JSON doesn't exist
+                github.getJsonFile(quizPath).catch(error => {
+                    console.warn(`Could not load quiz file for ${lessonData.lessonName}. This may be intentional.`, error);
+                    return {}; // Return an empty object if quiz file doesn't exist.
+                })
             ]);
 
             lessonData.lessonMd = lessonMd;
@@ -69,10 +112,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderAll();
         } catch (error) {
-            console.error(error);
-            lessonBodyEl.innerHTML = `<p class="error-message">Failed to load lesson content. Please check the file path and repository settings.</p>`;
+            console.error("Fatal Error during content loading:", error);
+            lessonBodyEl.innerHTML = `<p class="error-message">Failed to load lesson content. Please check that the file paths are correct in your repository and that the repository is public.</p>`;
         } finally {
-            // Hide all skeletons regardless of outcome
             lessonBodySkeleton.style.display = 'none';
             quizBodySkeleton.style.display = 'none';
             flashcardsBodySkeleton.style.display = 'none';
@@ -80,14 +122,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderAll() {
-        lessonTitleEl.textContent = formatName(lessonData.lessonName);
-        renderLesson();
-        renderFlashcards();
-        renderQuiz();
+        try {
+            lessonTitleEl.textContent = formatName(lessonData.lessonName);
+            renderLesson();
+            renderFlashcards();
+            renderQuiz();
+        } catch (error) {
+            console.error("Error during rendering:", error);
+            lessonBodyEl.innerHTML = `<p class="error-message">An error occurred while displaying the lesson content.</p>`;
+        }
     }
 
     function renderLesson() {
-        lessonBodyEl.innerHTML = marked.parse(lessonData.lessonMd);
+        if (lessonData.lessonMd) {
+            lessonBodyEl.innerHTML = marked.parse(lessonData.lessonMd);
+        } else {
+            throw new Error("Lesson Markdown content is missing.");
+        }
     }
 
     // --- FLASHCARDS LOGIC ---
@@ -97,51 +148,35 @@ document.addEventListener('DOMContentLoaded', () => {
             flashcardsContainer.innerHTML = '<p class="message-box">No flash cards available for this lesson.</p>';
             return;
         }
-
         flashcardState.currentCardIndex = 0;
-        
         flashcardsContainer.innerHTML = `
-            <div class="flashcard" id="flashcard">
-                <div class="flashcard-inner">
-                    <div class="flashcard-front"></div>
-                    <div class="flashcard-back"></div>
-                </div>
-            </div>
+            <div class="flashcard" id="flashcard"><div class="flashcard-inner"><div class="flashcard-front"></div><div class="flashcard-back"></div></div></div>
             <div class="flashcard-nav">
                 <button id="flashcard-prev-btn">&larr; Previous</button>
                 <span id="flashcard-counter"></span>
                 <button id="flashcard-next-btn">Next &rarr;</button>
-            </div>
-        `;
-
-        const card = document.getElementById('flashcard');
-        card.addEventListener('click', () => card.classList.toggle('is-flipped'));
-
+            </div>`;
+        document.getElementById('flashcard').addEventListener('click', (e) => e.currentTarget.classList.toggle('is-flipped'));
         document.getElementById('flashcard-prev-btn').addEventListener('click', () => navigateFlashcard(-1));
         document.getElementById('flashcard-next-btn').addEventListener('click', () => navigateFlashcard(1));
-
         updateFlashcardContent();
     }
 
     function updateFlashcardContent() {
-        const flashcards = lessonData.quizJson.flashcards;
-        const index = flashcardState.currentCardIndex;
-        const cardData = flashcards[index];
-
+        const { flashcards } = lessonData.quizJson;
+        const { currentCardIndex } = flashcardState;
+        const cardData = flashcards[currentCardIndex];
         document.querySelector('.flashcard-front').textContent = cardData.front;
         document.querySelector('.flashcard-back').textContent = cardData.back;
-        document.getElementById('flashcard-counter').textContent = `${index + 1} / ${flashcards.length}`;
-        
-        document.getElementById('flashcard-prev-btn').disabled = index === 0;
-        document.getElementById('flashcard-next-btn').disabled = index === flashcards.length - 1;
-
+        document.getElementById('flashcard-counter').textContent = `${currentCardIndex + 1} / ${flashcards.length}`;
+        document.getElementById('flashcard-prev-btn').disabled = currentCardIndex === 0;
+        document.getElementById('flashcard-next-btn').disabled = currentCardIndex === flashcards.length - 1;
         document.getElementById('flashcard').classList.remove('is-flipped');
     }
 
     function navigateFlashcard(direction) {
         const newIndex = flashcardState.currentCardIndex + direction;
-        const totalCards = lessonData.quizJson.flashcards.length;
-        if (newIndex >= 0 && newIndex < totalCards) {
+        if (newIndex >= 0 && newIndex < lessonData.quizJson.flashcards.length) {
             flashcardState.currentCardIndex = newIndex;
             updateFlashcardContent();
         }
@@ -154,87 +189,57 @@ document.addEventListener('DOMContentLoaded', () => {
             quizContainer.innerHTML = '<p class="message-box">No MCQs available for this lesson.</p>';
             return;
         }
-
         quizState = { currentQuestionIndex: 0, userAnswers: new Array(mcqs.length).fill(null), score: 0, isFinished: false };
         renderQuestion();
     }
 
     function renderQuestion() {
-        const index = quizState.currentQuestionIndex;
-        const question = lessonData.quizJson.mcqs[index];
-        const userAnswer = quizState.userAnswers[index];
-
+        const { currentQuestionIndex, userAnswers } = quizState;
+        const question = lessonData.quizJson.mcqs[currentQuestionIndex];
+        const userAnswer = userAnswers[currentQuestionIndex];
         quizContainer.innerHTML = `
-            <div class="quiz-progress">
-                <span>Question ${index + 1} of ${lessonData.quizJson.mcqs.length}</span>
-                <div class="progress-bar"><div class="progress-bar-inner" style="width: ${((index + 1) / lessonData.quizJson.mcqs.length) * 100}%"></div></div>
-            </div>
-            <div class="quiz-question">
-                <h4>${question.stem}</h4>
-                <div class="quiz-options">
-                    ${question.options.map((option, i) => `
-                        <button class="option-btn" data-index="${i}">${option}</button>
-                    `).join('')}
-                </div>
-                <div class="quiz-explanation" style="display: none;"></div>
-            </div>
-            <div class="quiz-nav">
-                <button id="quiz-prev-btn" ${index === 0 ? 'disabled' : ''}>&larr; Previous</button>
-                <button id="quiz-next-btn">${index === lessonData.quizJson.mcqs.length - 1 ? 'Finish' : 'Next &rarr;'}</button>
-            </div>
-        `;
-
+            <div class="quiz-progress"><span>Question ${currentQuestionIndex + 1} of ${lessonData.quizJson.mcqs.length}</span><div class="progress-bar"><div class="progress-bar-inner" style="width: ${((currentQuestionIndex + 1) / lessonData.quizJson.mcqs.length) * 100}%"></div></div></div>
+            <div class="quiz-question"><h4>${question.stem}</h4><div class="quiz-options">${question.options.map((option, i) => `<button class="option-btn" data-index="${i}">${option}</button>`).join('')}</div><div class="quiz-explanation" style="display: none;"></div></div>
+            <div class="quiz-nav"><button id="quiz-prev-btn" ${currentQuestionIndex === 0 ? 'disabled' : ''}>&larr; Previous</button><button id="quiz-next-btn">${currentQuestionIndex === lessonData.quizJson.mcqs.length - 1 ? 'Finish' : 'Next &rarr;'}</button></div>`;
         document.getElementById('quiz-prev-btn').addEventListener('click', () => navigateQuestion(-1));
         document.getElementById('quiz-next-btn').addEventListener('click', () => navigateQuestion(1));
-        
         const optionButtons = quizContainer.querySelectorAll('.option-btn');
         if (userAnswer !== null) {
             showAnswerFeedback(question, userAnswer);
         } else {
-            optionButtons.forEach(btn => {
-                btn.addEventListener('click', () => selectAnswer(parseInt(btn.dataset.index)));
-            });
+            optionButtons.forEach(btn => btn.addEventListener('click', () => selectAnswer(parseInt(btn.dataset.index))));
         }
     }
 
     function selectAnswer(selectedIndex) {
-        const index = quizState.currentQuestionIndex;
-        if (quizState.userAnswers[index] !== null) return; // Already answered
-
-        quizState.userAnswers[index] = selectedIndex;
-        const question = lessonData.quizJson.mcqs[index];
-        showAnswerFeedback(question, selectedIndex);
+        const { currentQuestionIndex, userAnswers } = quizState;
+        if (userAnswers[currentQuestionIndex] !== null) return;
+        userAnswers[currentQuestionIndex] = selectedIndex;
+        showAnswerFeedback(lessonData.quizJson.mcqs[currentQuestionIndex], selectedIndex);
     }
     
     function showAnswerFeedback(question, selectedIndex) {
         const optionButtons = quizContainer.querySelectorAll('.option-btn');
         optionButtons.forEach(btn => btn.disabled = true);
-
-        const correctIndex = question.answerIndex;
-        
-        if (selectedIndex === correctIndex) {
+        const { answerIndex, explanation } = question;
+        if (selectedIndex === answerIndex) {
             optionButtons[selectedIndex].classList.add('correct');
         } else {
-            if (selectedIndex !== null) {
-                optionButtons[selectedIndex].classList.add('incorrect');
-            }
-            optionButtons[correctIndex].classList.add('correct');
+            if (selectedIndex !== null) optionButtons[selectedIndex].classList.add('incorrect');
+            optionButtons[answerIndex].classList.add('correct');
         }
-
         const explanationEl = quizContainer.querySelector('.quiz-explanation');
-        explanationEl.textContent = question.explanation;
+        explanationEl.textContent = explanation;
         explanationEl.style.display = 'block';
     }
 
     function navigateQuestion(direction) {
         const newIndex = quizState.currentQuestionIndex + direction;
         const totalQuestions = lessonData.quizJson.mcqs.length;
-
         if (direction === 1 && quizState.currentQuestionIndex === totalQuestions - 1) {
             showQuizResults();
             return;
         }
-
         if (newIndex >= 0 && newIndex < totalQuestions) {
             quizState.currentQuestionIndex = newIndex;
             renderQuestion();
@@ -244,37 +249,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function showQuizResults() {
         quizState.isFinished = true;
         let score = 0;
-        quizState.userAnswers.forEach((answer, index) => {
-            if (answer === lessonData.quizJson.mcqs[index].answerIndex) {
-                score++;
-            }
+        quizState.userAnswers.forEach((answer, i) => {
+            if (answer === lessonData.quizJson.mcqs[i].answerIndex) score++;
         });
         quizState.score = score;
         const total = lessonData.quizJson.mcqs.length;
-
-        quizContainer.innerHTML = `
-            <div class="quiz-results">
-                <h3>Quiz Complete</h3>
-                <p class="score">You scored ${score} out of ${total} (${Math.round((score/total)*100)}%)</p>
-                <div id="quiz-review"></div>
-                <button id="restart-quiz-btn" class="modal-btn primary">Restart Quiz</button>
-            </div>
-        `;
-
+        quizContainer.innerHTML = `<div class="quiz-results"><h3>Quiz Complete</h3><p class="score">You scored ${score} out of ${total} (${Math.round((score/total)*100)}%)</p><div id="quiz-review"></div><button id="restart-quiz-btn" class="modal-btn primary">Restart Quiz</button></div>`;
         const reviewContainer = document.getElementById('quiz-review');
-        lessonData.quizJson.mcqs.forEach((q, index) => {
-            const userAnswer = quizState.userAnswers[index];
+        lessonData.quizJson.mcqs.forEach((q, i) => {
+            const userAnswer = quizState.userAnswers[i];
             const isCorrect = userAnswer === q.answerIndex;
-            const reviewEl = document.createElement('div');
-            reviewEl.className = 'quiz-review-item';
-            reviewEl.innerHTML = `
-                <p><strong>Q: ${q.stem}</strong></p>
-                <p class="${isCorrect ? 'correct-text' : 'incorrect-text'}">Your answer: ${userAnswer !== null ? q.options[userAnswer] : 'Not answered'}</p>
-                ${!isCorrect ? `<p class="correct-text">Correct answer: ${q.options[q.answerIndex]}</p>` : ''}
-            `;
-            reviewContainer.appendChild(reviewEl);
+            reviewContainer.innerHTML += `<div class="quiz-review-item"><p><strong>Q: ${q.stem}</strong></p><p class="${isCorrect ? 'correct-text' : 'incorrect-text'}">Your answer: ${userAnswer !== null ? q.options[userAnswer] : 'Not answered'}</p>${!isCorrect ? `<p class="correct-text">Correct answer: ${q.options[q.answerIndex]}</p>` : ''}</div>`;
         });
-
         document.getElementById('restart-quiz-btn').addEventListener('click', renderQuiz);
     }
 
@@ -282,4 +268,3 @@ document.addEventListener('DOMContentLoaded', () => {
         return name.replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
     }
 });
-
