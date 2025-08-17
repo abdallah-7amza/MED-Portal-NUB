@@ -1,89 +1,262 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lesson - MED-Portal</title>
-    <link rel="stylesheet" href="assets/styles.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-</head>
-<body>
-    <header class="site-header">
-        <div class="container header-container">
-            <h1><a href="index.html">MED-Portal</a></h1>
-            <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle light/dark theme">
-                <svg id="theme-icon-light" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-                <svg id="theme-icon-dark" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-            </button>
-        </div>
-    </header>
+/* ======================================================================= */
+/* FILE: js/lesson.js                                                      */
+/* PURPOSE: Handles all logic for the lesson page, including tabs,         */
+/* rendering content, quizzes, and flashcards.                             */
+/* ======================================================================= */
 
-    <main>
-        <div class="container">
-            <a id="back-to-lessons-link" href="#" class="back-link">&larr; Back to Lessons</a>
-            <h2 id="lesson-title" class="page-title">Loading Lesson...</h2>
+document.addEventListener('DOMContentLoaded', () => {
+    // This script only runs on the lesson page
+    if (!window.location.pathname.endsWith('lesson.html')) return;
+
+    // --- CONFIGURATION & INITIALIZATION ---
+    const GITHUB_REPO = 'abdallah-7amza/MED-Portal-NUB';
+    const github = new GitHubService(GITHUB_REPO);
+    const aiTutor = new AITutor();
+
+    // --- DOM ELEMENTS ---
+    const lessonTitleEl = document.getElementById('lesson-title');
+    const lessonBodyEl = document.getElementById('lesson-body');
+    const lessonBodySkeleton = document.getElementById('lesson-body-skeleton');
+    const quizContainer = document.getElementById('quiz-container');
+    const quizBodySkeleton = document.getElementById('quiz-body-skeleton');
+    const flashcardsContainer = document.getElementById('flashcards-container');
+    const flashcardsBodySkeleton = document.getElementById('flashcards-body-skeleton');
+    const backLink = document.getElementById('back-to-lessons-link');
+    const tabs = document.querySelectorAll('.tab-link');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    // --- STATE ---
+    let lessonData = {}; // Will hold all data for the current lesson
+    let quizState = { currentQuestionIndex: 0, userAnswers: [], score: 0, isFinished: false };
+    let flashcardState = { currentCardIndex: 0 };
+
+    // --- INITIALIZATION ---
+    const params = new URLSearchParams(window.location.search);
+    lessonData.year = params.get('year');
+    lessonData.branch = params.get('branch');
+    lessonData.lessonName = params.get('lesson');
+
+    if (lessonData.year && lessonData.branch && lessonData.lessonName) {
+        backLink.href = `lessons-list.html?year=${lessonData.year}&branch=${lessonData.branch}`;
+        loadContent();
+    }
+
+    // --- EVENT LISTENERS ---
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(item => item.classList.remove('active'));
+            tab.classList.add('active');
+            tabContents.forEach(content => content.classList.remove('active'));
+            document.getElementById(tab.dataset.tab).classList.add('active');
+        });
+    });
+
+    // --- CORE FUNCTIONS ---
+    async function loadContent() {
+        try {
+            const lessonPath = `lessons/${lessonData.year}/${lessonData.branch}/${lessonData.lessonName}.md`;
+            const quizPath = `questions/${lessonData.year}/${lessonData.branch}/${lessonData.lessonName}.json`;
             
-            <div class="tabs">
-                <button class="tab-link active" data-tab="lesson-content">Lesson</button>
-                <button class="tab-link" data-tab="flashcards-content">Flash Cards</button>
-                <button class="tab-link" data-tab="quiz-content">MCQs</button>
-            </div>
+            const [lessonMd, quizJson] = await Promise.all([
+                github.getRawFile(lessonPath),
+                github.getJsonFile(quizPath).catch(() => ({})) // Gracefully fail if JSON doesn't exist
+            ]);
 
-            <div id="lesson-content" class="tab-content active">
-                <div id="lesson-body-skeleton" class="content-skeleton"></div>
-                <div id="lesson-body" class="lesson-body-content"></div>
-            </div>
+            lessonData.lessonMd = lessonMd;
+            lessonData.quizJson = quizJson;
+            aiTutor.setContext(lessonData);
 
-            <div id="flashcards-content" class="tab-content">
-                <div id="flashcards-body-skeleton" class="content-skeleton"></div>
-                <div id="flashcards-container"></div>
-            </div>
+            renderAll();
+        } catch (error) {
+            console.error(error);
+            lessonBodyEl.innerHTML = `<p class="error-message">Failed to load lesson content. Please check the file path and repository settings.</p>`;
+        } finally {
+            lessonBodySkeleton.style.display = 'none';
+            quizBodySkeleton.style.display = 'none';
+            flashcardsBodySkeleton.style.display = 'none';
+        }
+    }
 
-            <div id="quiz-content" class="tab-content">
-                <div id="quiz-body-skeleton" class="content-skeleton"></div>
-                <div id="quiz-container"></div>
+    function renderAll() {
+        lessonTitleEl.textContent = formatName(lessonData.lessonName);
+        renderLesson();
+        renderFlashcards();
+        renderQuiz();
+    }
+
+    function renderLesson() {
+        lessonBodyEl.innerHTML = marked.parse(lessonData.lessonMd);
+    }
+
+    // --- FLASHCARDS LOGIC ---
+    function renderFlashcards() {
+        const flashcards = lessonData.quizJson?.flashcards;
+        if (!flashcards || flashcards.length === 0) {
+            flashcardsContainer.innerHTML = '<p class="message-box">No flash cards available for this lesson.</p>';
+            return;
+        }
+
+        flashcardState.currentCardIndex = 0;
+        
+        flashcardsContainer.innerHTML = `
+            <div class="flashcard" id="flashcard">
+                <div class="flashcard-inner">
+                    <div class="flashcard-front"></div>
+                    <div class="flashcard-back"></div>
+                </div>
             </div>
-        </div>
-    </main>
+            <div class="flashcard-nav">
+                <button id="flashcard-prev-btn">&larr; Previous</button>
+                <span id="flashcard-counter"></span>
+                <button id="flashcard-next-btn">Next &rarr;</button>
+            </div>
+        `;
+
+        const card = document.getElementById('flashcard');
+        card.addEventListener('click', () => card.classList.toggle('is-flipped'));
+
+        document.getElementById('flashcard-prev-btn').addEventListener('click', () => navigateFlashcard(-1));
+        document.getElementById('flashcard-next-btn').addEventListener('click', () => navigateFlashcard(1));
+
+        updateFlashcardContent();
+    }
+
+    function updateFlashcardContent() {
+        const flashcards = lessonData.quizJson.flashcards;
+        const index = flashcardState.currentCardIndex;
+        const cardData = flashcards[index];
+
+        document.querySelector('.flashcard-front').textContent = cardData.front;
+        document.querySelector('.flashcard-back').textContent = cardData.back;
+        document.getElementById('flashcard-counter').textContent = `${index + 1} / ${flashcards.length}`;
+        
+        document.getElementById('flashcard-prev-btn').disabled = index === 0;
+        document.getElementById('flashcard-next-btn').disabled = index === flashcards.length - 1;
+
+        document.getElementById('flashcard').classList.remove('is-flipped');
+    }
+
+    function navigateFlashcard(direction) {
+        const newIndex = flashcardState.currentCardIndex + direction;
+        const totalCards = lessonData.quizJson.flashcards.length;
+        if (newIndex >= 0 && newIndex < totalCards) {
+            flashcardState.currentCardIndex = newIndex;
+            updateFlashcardContent();
+        }
+    }
+
+    // --- QUIZ (MCQs) LOGIC ---
+    function renderQuiz() {
+        const mcqs = lessonData.quizJson?.mcqs;
+        if (!mcqs || mcqs.length === 0) {
+            quizContainer.innerHTML = '<p class="message-box">No MCQs available for this lesson.</p>';
+            return;
+        }
+
+        quizState = { currentQuestionIndex: 0, userAnswers: new Array(mcqs.length).fill(null), score: 0, isFinished: false };
+        renderQuestion();
+    }
+
+    function renderQuestion() {
+        const index = quizState.currentQuestionIndex;
+        const question = lessonData.quizJson.mcqs[index];
+        const userAnswer = quizState.userAnswers[index];
+
+        quizContainer.innerHTML = `
+            <div class="quiz-progress">
+                <span>Question ${index + 1} of ${lessonData.quizJson.mcqs.length}</span>
+                <div class="progress-bar"><div class="progress-bar-inner" style="width: ${((index + 1) / lessonData.quizJson.mcqs.length) * 100}%"></div></div>
+            </div>
+            <div class="quiz-question">
+                <h4>${question.stem}</h4>
+                <div class="quiz-options">
+                    ${question.options.map((option, i) => `<button class="option-btn" data-index="${i}">${option}</button>`).join('')}
+                </div>
+                <div class="quiz-explanation" style="display: none;"></div>
+            </div>
+            <div class="quiz-nav">
+                <button id="quiz-prev-btn" ${index === 0 ? 'disabled' : ''}>&larr; Previous</button>
+                <button id="quiz-next-btn">${index === lessonData.quizJson.mcqs.length - 1 ? 'Finish' : 'Next &rarr;'}</button>
+            </div>
+        `;
+
+        document.getElementById('quiz-prev-btn').addEventListener('click', () => navigateQuestion(-1));
+        document.getElementById('quiz-next-btn').addEventListener('click', () => navigateQuestion(1));
+        
+        const optionButtons = quizContainer.querySelectorAll('.option-btn');
+        if (userAnswer !== null) {
+            showAnswerFeedback(question, userAnswer);
+        } else {
+            optionButtons.forEach(btn => {
+                btn.addEventListener('click', () => selectAnswer(parseInt(btn.dataset.index)));
+            });
+        }
+    }
+
+    function selectAnswer(selectedIndex) {
+        const index = quizState.currentQuestionIndex;
+        if (quizState.userAnswers[index] !== null) return;
+
+        quizState.userAnswers[index] = selectedIndex;
+        const question = lessonData.quizJson.mcqs[index];
+        showAnswerFeedback(question, selectedIndex);
+    }
     
-    <button id="ai-tutor-fab" aria-label="Open AI Tutor">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9-9 9-9-1.8-9-9 1.8-9 9-9Z"/><path d="m8 12 2.5 2.5"/><path d="m14 12-2.5 2.5"/><path d="M12 17v.01"/></svg>
-    </button>
+    function showAnswerFeedback(question, selectedIndex) {
+        const optionButtons = quizContainer.querySelectorAll('.option-btn');
+        optionButtons.forEach(btn => btn.disabled = true);
 
-    <div id="ai-modal-overlay" class="modal-overlay">
-        <div id="api-key-modal" class="modal-window">
-             <h3>Activate AI Tutor</h3>
-             <p>To enable the AI-powered assistant, please enter your Gemini API key.</p>
-             <input type="password" id="api-key-input" placeholder="Enter your API key here">
-             <div class="modal-actions">
-                <button id="cancel-api-key-btn" class="modal-btn secondary">Cancel</button>
-                <button id="save-api-key-btn" class="modal-btn primary">Save & Start</button>
-             </div>
-        </div>
-        <div id="chat-modal" class="modal-window chat-window">
-            <div class="chat-header">
-                <h3>AI Tutor</h3>
-                <button id="close-chat-btn" class="close-btn">&times;</button>
+        const correctIndex = question.answerIndex;
+        
+        if (selectedIndex === correctIndex) {
+            optionButtons[selectedIndex].classList.add('correct');
+        } else {
+            optionButtons[selectedIndex].classList.add('incorrect');
+            optionButtons[correctIndex].classList.add('correct');
+        }
+
+        const explanationEl = quizContainer.querySelector('.quiz-explanation');
+        explanationEl.textContent = question.explanation;
+        explanationEl.style.display = 'block';
+    }
+
+    function navigateQuestion(direction) {
+        const newIndex = quizState.currentQuestionIndex + direction;
+        const totalQuestions = lessonData.quizJson.mcqs.length;
+
+        if (direction === 1 && quizState.currentQuestionIndex === totalQuestions - 1) {
+            showQuizResults();
+            return;
+        }
+
+        if (newIndex >= 0 && newIndex < totalQuestions) {
+            quizState.currentQuestionIndex = newIndex;
+            renderQuestion();
+        }
+    }
+
+    function showQuizResults() {
+        quizState.isFinished = true;
+        let score = 0;
+        quizState.userAnswers.forEach((answer, index) => {
+            if (answer === lessonData.quizJson.mcqs[index].answerIndex) {
+                score++;
+            }
+        });
+        quizState.score = score;
+        const total = lessonData.quizJson.mcqs.length;
+
+        quizContainer.innerHTML = `
+            <div class="quiz-results">
+                <h3>Quiz Complete</h3>
+                <p class="score">You scored ${score} out of ${total} (${Math.round((score/total)*100)}%)</p>
+                <button id="restart-quiz-btn" class="modal-btn primary">Restart Quiz</button>
             </div>
-            <div id="chat-messages"></div>
-            <form id="chat-form">
-                <input type="text" id="chat-input" placeholder="Ask about this lesson...">
-                <button type="submit" aria-label="Send message">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                </button>
-            </form>
-        </div>
-    </div>
+        `;
+        document.getElementById('restart-quiz-btn').addEventListener('click', renderQuiz);
+    }
 
-    <footer class="site-footer">
-        <p>By Abdallah Hamza</p>
-    </footer>
-
-    <script src="js/github.js"></script>
-    <script src="js/ai.js"></script>
-    <script src="js/lesson.js"></script>
-</body>
-</html>
+    function formatName(name) {
+        return name.replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+    }
+});
