@@ -1,0 +1,34 @@
+[
+  {
+    "question": "What is the most sensitive laboratory marker for iron deficiency anemia?",
+    "options": [
+      "Serum iron",
+      "Total iron-binding capacity (TIBC)",
+      "Serum ferritin",
+      "Transferrin saturation"
+    ],
+    "answer": "Serum ferritin",
+    "explanation": "Serum ferritin is the most specific and sensitive test for iron deficiency as it directly measures iron stores. A level <15 ng/mL is diagnostic."
+  },
+  {
+    "question": "A 14-month-old child presents with pallor and fatigue. CBC shows Hb 8.5 g/dL, MCV 65 fL. What is the most likely cause?",
+    "options": [
+      "Exclusive breastfeeding without iron supplementation",
+      "Hereditary spherocytosis",
+      "Vitamin B12 deficiency",
+      "Sickle cell disease"
+    ],
+    "answer": "Exclusive breastfeeding without iron supplementation",
+    "explanation": "Breast milk is low in iron. Infants exclusively breastfed beyond 6 months without iron supplementation are at high risk for iron deficiency anemia."
+  },
+  {
+    "question": "Which finding is characteristic of iron deficiency anemia on peripheral blood smear?",
+    "options": [
+      "Macrocytes",
+      "Spherocytes",
+      "Microcytes and hypochromia",
+      "Target cells"
+    ],
+    "answer": "Microcytes and hypochromia",
+    "explanation": "IDA shows microcytic (small), hypochromic (pale) red blood cells due to decreased hemoglobin synthesis."
+  }
