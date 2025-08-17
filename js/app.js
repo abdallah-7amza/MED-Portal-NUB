@@ -1,11 +1,11 @@
 
 /* ======================================================================= */
 /* FILE: js/app.js                                                         */
-/* VERSION: 3.0 - Automated Discovery Model                                */
+/* VERSION: 3.1 - Corrected Repository Name                                */
 /* ======================================================================= */
 document.addEventListener('DOMContentLoaded', () => {
-    // Using the correct repository name from your code.
-    const GITHUB_REPO = 'abdallah-7amza/medical-platform'; 
+    // FIX: Corrected the repository name to match your GitHub Pages URL.
+    const GITHUB_REPO = 'abdallah-7amza/MED-Portal-NUB'; 
     const github = new GitHubService(GITHUB_REPO);
     const params = new URLSearchParams(window.location.search);
 
