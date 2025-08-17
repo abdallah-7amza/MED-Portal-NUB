@@ -1,103 +1,137 @@
+/**
+ * Main Application Logic for NUB Med Portal
+ * Handles navigation and view rendering
+ * 
+ * Prepared by Abdallah Hamza
+ */
 
-/* ======================================================================= */
-/* FILE: js/app.js                                                         */
-/* VERSION: 3.1 - Corrected Repository Name                                */
-/* ======================================================================= */
+import githubService from './github.js';
+
 document.addEventListener('DOMContentLoaded', () => {
-    // FIX: Corrected the repository name to match your GitHub Pages URL.
-    const GITHUB_REPO = 'abdallah-7amza/MED-Portal-NUB'; 
-    const github = new GitHubService(GITHUB_REPO);
-    const params = new URLSearchParams(window.location.search);
-
-    // --- THEME MANAGEMENT (No changes) ---
-    const themeToggle = document.getElementById('theme-toggle');
-    const lightIcon = document.getElementById('theme-icon-light');
-    const darkIcon = document.getElementById('theme-icon-dark');
-    const applyTheme = (theme) => {
-        document.body.classList.toggle('dark-mode', theme === 'dark');
-        if (lightIcon) lightIcon.style.display = theme === 'dark' ? 'none' : 'block';
-        if (darkIcon) darkIcon.style.display = theme === 'dark' ? 'block' : 'none';
+    // DOM elements
+    const views = {
+        year: document.getElementById('year-view'),
+        subject: document.getElementById('subject-view'),
+        topic: document.getElementById('topic-view'),
+        subjectTitle: document.getElementById('subject-view-title'),
+        topicTitle: document.getElementById('topic-view-title'),
+        subjectGrid: document.getElementById('subject-grid'),
+        topicGrid: document.getElementById('topic-grid')
     };
-    const currentTheme = localStorage.getItem('theme') || 'light';
-    applyTheme(currentTheme);
-    if (themeToggle) {
-        themeToggle.addEventListener('click', () => {
-            const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
-            localStorage.setItem('theme', newTheme);
-            applyTheme(newTheme);
+    
+    // Navigation state
+    let currentState = {
+        year: null,
+        subject: null
+    };
+    
+    // Initialize the application
+    init();
+    
+    async function init() {
+        // Add event listeners
+        setupEventListeners();
+        
+        // Show initial view
+        showView('year');
+    }
+    
+    function setupEventListeners() {
+        // Year selection
+        document.querySelectorAll('#year-grid .card').forEach(card => {
+            card.addEventListener('click', async () => {
+                const year = card.dataset.year;
+                currentState.year = year;
+                
+                // Fetch subjects for selected year
+                const subjects = await githubService.getSubjects(year);
+                if (subjects.length === 0) {
+                    views.subjectGrid.innerHTML = '<p class="no-content">No subjects available for this year</p>';
+                } else {
+                    renderSubjects(subjects);
+                }
+                
+                views.subjectTitle.textContent = `Subjects for ${year.replace('-', ' ')}`;
+                showView('subject');
+            });
         });
-    }
-
-    // --- AUTOMATED PAGE LOGIC ---
-    const path = window.location.pathname;
-
-    async function initializePage() {
-        // The homepage is static, so we only need dynamic logic for other pages.
-        if (path.endsWith('/') || path.endsWith('index.html')) return;
-
-        try {
-            // Fetch all lessons once and build pages from this data.
-            const allLessons = await github.getAllLessons();
-
-            if (path.endsWith('branches.html')) {
-                const yearId = params.get('year');
-                if (yearId) {
-                    // Find all unique branch names for the selected year
-                    const branchesForYear = [...new Set(allLessons
-                        .filter(lesson => lesson.year === yearId)
-                        .map(lesson => lesson.branch)
-                    )];
-                    
-                    document.getElementById('year-title').textContent = `${formatName(yearId)} Branches`;
-                    const grid = document.getElementById('branches-grid');
-                    const branchData = branchesForYear.map(branchId => ({ name: branchId }));
-                    renderCards(grid, branchData, (branch) => `lessons-list.html?year=${yearId}&branch=${branch.name}`);
-                }
-            } else if (path.endsWith('lessons-list.html')) {
-                const yearId = params.get('year');
-                const branchId = params.get('branch');
-
-                if (yearId && branchId) {
-                    // Filter the master list to get only the lessons for this specific branch
-                    const lessonsForBranch = allLessons.filter(lesson => lesson.year === yearId && lesson.branch === branchId);
-                    
-                    document.getElementById('branch-title').textContent = `Lessons in ${formatName(branchId)}`;
-                    document.getElementById('back-to-branches-link').href = `branches.html?year=${yearId}`;
-                    const grid = document.getElementById('lessons-grid');
-                    renderCards(grid, lessonsForBranch, (lesson) => `lesson.html?year=${yearId}&branch=${branchId}&lesson=${lesson.id}`);
-                    
-                    // Search functionality
-                    const searchBar = document.getElementById('search-bar');
-                    searchBar.addEventListener('input', (e) => {
-                        const query = e.target.value.toLowerCase();
-                        const filteredLessons = lessonsForBranch.filter(lesson => lesson.title.toLowerCase().includes(query));
-                        renderCards(grid, filteredLessons, (lesson) => `lesson.html?year=${yearId}&branch=${branchId}&lesson=${lesson.id}`);
-                    });
-                }
+        
+        // Subject selection
+        document.querySelector('#subject-grid').addEventListener('click', async (e) => {
+            const card = e.target.closest('.card');
+            if (!card) return;
+            
+            const subject = card.dataset.subjectId;
+            currentState.subject = subject;
+            
+            // Fetch topics for selected subject
+            const topics = await githubService.getTopics(currentState.year, subject);
+            if (topics.length === 0) {
+                views.topicGrid.innerHTML = '<p class="no-content">No topics available for this subject</p>';
+            } else {
+                renderTopics(topics);
             }
-        } catch (error) {
-            console.error("Initialization Error:", error);
-            document.querySelector('main .container').innerHTML = `<p class="error-message">Could not load site content from GitHub.</p>`;
+            
+            views.topicTitle.textContent = `Topics for ${subject.replace(/-/g, ' ')}`;
+            showView('topic');
+        });
+        
+        // Topic selection
+        document.querySelector('#topic-grid').addEventListener('click', async (e) => {
+            const card = e.target.closest('.card');
+            if (!card) return;
+            
+            const topic = card.dataset.topicId;
+            navigateToLesson(currentState.year, currentState.subject, topic);
+        });
+        
+        // Back button in lesson.html
+        if (document.getElementById('back-to-topics-btn')) {
+            document.getElementById('back-to-topics-btn').addEventListener('click', () => {
+                history.back();
+            });
         }
     }
-
-    // --- UTILITY FUNCTIONS ---
-    function renderCards(grid, items, urlBuilder) {
-        if (!grid) return;
-        if (!items || items.length === 0) {
-            grid.innerHTML = '<p class="message-box">No content has been added to this section yet.</p>';
-            return;
-        }
-        grid.innerHTML = items.map(item => `
-            <a href="${urlBuilder(item)}" class="card">
-                <h3>${item.title || formatName(item.name)}</h3>
-            </a>
+    
+    function renderSubjects(subjects) {
+        views.subjectGrid.innerHTML = subjects.map(subject => `
+            <div class="card" data-subject-id="${subject.id}">
+                <h3>${subject.title}</h3>
+                <p>Click to view topics</p>
+            </div>
         `).join('');
     }
-
-    function formatName(name) {
-        return name.replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+    
+    function renderTopics(topics) {
+        views.topicGrid.innerHTML = topics.map(topic => `
+            <div class="card" data-topic-id="${topic.id}">
+                <h3>${topic.title}</h3>
+                <p>Click to view lesson</p>
+            </div>
+        `).join('');
     }
-
-    initializePage();
+    
+    function showView(viewName) {
+        // Hide all views
+        Object.values(views).forEach(view => {
+            if (view.classList) view.classList.remove('active');
+        });
+        
+        // Show selected view
+        if (views[viewName]) views[viewName].classList.add('active');
+        
+        // Scroll to top
+        window.scrollTo(0, 0);
+    }
+    
+    function navigateToLesson(year, subject, topic) {
+        // Encode parameters for URL
+        const params = new URLSearchParams();
+        params.set('year', year);
+        params.set('subject', subject);
+        params.set('topic', topic);
+        
+        // Navigate to lesson page
+        window.location.href = `lesson.html?${params.toString()}`;
+    }
 });
