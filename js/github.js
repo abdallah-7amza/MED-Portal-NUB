@@ -1,37 +1,120 @@
 /**
- * A service class to handle all interactions with the GitHub API.
+ * GitHub Service for NUB Med Portal
+ * Handles all interactions with GitHub API
+ * 
+ * Prepared by Abdallah Hamza
  */
+
+const GITHUB_OWNER = 'abdallah-7amza';
+const GITHUB_REPO = 'nub-med-portal';
+const BASE_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents`;
+
 class GitHubService {
-    constructor(repoPath) {
-        if (!repoPath || repoPath.split('/').length !== 2) {
-            throw new Error("Invalid repository path. Must be in 'owner/repo' format.");
-        }
-        this.owner = repoPath.split('/')[0];
-        this.repo = repoPath.split('/')[1];
-        this.baseUrl = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/main/`;
+    constructor() {
+        this.cache = new Map();
     }
 
-    /**
-     * Fetches a raw text file (like .md) from the repository.
-     * @param {string} filePath - The path to the file from the repo root.
-     * @returns {Promise<string>} - The text content of the file.
-     */
-    async getRawFile(filePath) {
-        const url = this.baseUrl + filePath;
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch raw file: ${filePath}. Status: ${response.status}`);
+    async getAcademicYears() {
+        const cacheKey = 'academic-years';
+        if (this.cache.has(cacheKey)) return this.cache.get(cacheKey);
+        
+        try {
+            const response = await fetch(`${BASE_URL}/years`);
+            if (!response.ok) throw new Error('Failed to fetch academic years');
+            
+            const data = await response.json();
+            const years = data
+                .filter(item => item.type === 'dir')
+                .map(item => item.name.replace('.json', ''));
+            
+            this.cache.set(cacheKey, years);
+            return years;
+        } catch (error) {
+            console.error('GitHubService.getAcademicYears:', error);
+            return [];
         }
-        return await response.text();
     }
 
-    /**
-     * Fetches and parses a JSON file from the repository.
-     * @param {string} filePath - The path to the file from the repo root.
-     * @returns {Promise<Object>} - The parsed JSON object.
-     */
-    async getJsonFile(filePath) {
-        const textContent = await this.getRawFile(filePath);
-        return JSON.parse(textContent);
+    async getSubjects(year) {
+        const cacheKey = `subjects-${year}`;
+        if (this.cache.has(cacheKey)) return this.cache.get(cacheKey);
+        
+        try {
+            const response = await fetch(`${BASE_URL}/years/${year}`);
+            if (!response.ok) throw new Error(`Failed to fetch subjects for ${year}`);
+            
+            const data = await response.json();
+            const subjects = data
+                .filter(item => item.type === 'dir')
+                .map(item => ({
+                    id: item.name,
+                    title: item.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                    path: item.path
+                }));
+            
+            this.cache.set(cacheKey, subjects);
+            return subjects;
+        } catch (error) {
+            console.error(`GitHubService.getSubjects for ${year}:`, error);
+            return [];
+        }
+    }
+
+    async getTopics(year, subject) {
+        const cacheKey = `topics-${year}-${subject}`;
+        if (this.cache.has(cacheKey)) return this.cache.get(cacheKey);
+        
+        try {
+            const response = await fetch(`${BASE_URL}/years/${year}/${subject}`);
+            if (!response.ok) throw new Error(`Failed to fetch topics for ${subject}`);
+            
+            const data = await response.json();
+            const topics = data
+                .filter(item => item.type === 'dir')
+                .map(item => ({
+                    id: item.name,
+                    title: item.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                    path: item.path
+                }));
+            
+            this.cache.set(cacheKey, topics);
+            return topics;
+        } catch (error) {
+            console.error(`GitHubService.getTopics for ${subject}:`, error);
+            return [];
+        }
+    }
+
+    async getLessonContent(year, subject, topic) {
+        const cacheKey = `content-${year}-${subject}-${topic}`;
+        if (this.cache.has(cacheKey)) return this.cache.get(cacheKey);
+        
+        try {
+            // Fetch lesson content
+            const contentUrl = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main/years/${year}/${subject}/${topic}/content.md`;
+            const contentResponse = await fetch(contentUrl);
+            if (!contentResponse.ok) throw new Error('Lesson content not found');
+            
+            const content = await contentResponse.text();
+            
+            // Fetch quiz questions
+            const quizUrl = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main/questions/${year}/${subject}/${topic}.json`;
+            const quizResponse = await fetch(quizUrl);
+            const quiz = quizResponse.ok ? await quizResponse.json() : null;
+            
+            const lessonData = { content, quiz };
+            this.cache.set(cacheKey, lessonData);
+            return lessonData;
+        } catch (error) {
+            console.error(`GitHubService.getLessonContent for ${topic}:`, error);
+            return {
+                content: '# Lesson Not Found\n\nThis lesson content is not available yet.',
+                quiz: null
+            };
+        }
     }
 }
+
+// Export as singleton
+const githubService = new GitHubService();
+export default githubService;
