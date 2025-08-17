@@ -1,72 +1,37 @@
-/* ======================================================================= */
-/* FILE: js/github.js                                                      */
-/* VERSION: 4.0 - Automated Discovery Model                                */
-/* ======================================================================= */
+/**
+ * A service class to handle all interactions with the GitHub API.
+ */
 class GitHubService {
-    constructor(repo) {
-        this.repo = repo;
-        this.apiBase = `https://api.github.com/repos/${repo}`;
-        this.rawBase = `https://raw.githubusercontent.com/${repo}/main`;
-    }
-
-    /**
-     * Fetches the entire file tree for the repository using the Git Trees API.
-     * This is the core function for automated content discovery.
-     * @returns {Promise<Array>} A promise that resolves to a structured list of all lesson files.
-     */
-    async getAllLessons() {
-        // This single API call gets a list of all files in the repository.
-        const apiUrl = `${this.apiBase}/git/trees/main?recursive=1`;
-        try {
-            const response = await fetch(apiUrl);
-            if (!response.ok) {
-                throw new Error(`GitHub API request failed: ${response.statusText}`);
-            }
-            const data = await response.json();
-            
-            // Process the flat file list into a structured lesson object
-            const lessonFiles = data.tree
-                .filter(file => file.path.startsWith('lessons/') && file.path.endsWith('.md'))
-                .map(file => {
-                    const pathParts = file.path.split('/'); // e.g., ['lessons', 'fifth-year', 'pediatrics', 'neonatal-jaundice.md']
-                    if (pathParts.length < 4) return null; // Ensure the structure is valid (lessons/year/branch/file.md)
-
-                    const year = pathParts[1];
-                    const branch = pathParts[2];
-                    const fileName = pathParts[3];
-                    const lessonId = fileName.replace('.md', '');
-                    const title = lessonId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    
-                    return { path: file.path, title, year, branch, id: lessonId };
-                })
-                .filter(Boolean); // Remove any null entries from invalid paths
-
-            return lessonFiles;
-        } catch (error) {
-            console.error("Error fetching lesson tree:", error);
-            return [];
+    constructor(repoPath) {
+        if (!repoPath || repoPath.split('/').length !== 2) {
+            throw new Error("Invalid repository path. Must be in 'owner/repo' format.");
         }
+        this.owner = repoPath.split('/')[0];
+        this.repo = repoPath.split('/')[1];
+        this.baseUrl = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/main/`;
     }
 
     /**
-     * Fetches the raw text content of a file.
-     * @param {string} path - The full path to the file, e.g., 'lessons/year/branch/lesson.md'.
-     * @returns {Promise<string>} The file content as text.
+     * Fetches a raw text file (like .md) from the repository.
+     * @param {string} filePath - The path to the file from the repo root.
+     * @returns {Promise<string>} - The text content of the file.
      */
-    async getRawFile(path) {
-        const url = `${this.rawBase}/${path}`;
+    async getRawFile(filePath) {
+        const url = this.baseUrl + filePath;
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to fetch raw file: ${path}`);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch raw file: ${filePath}. Status: ${response.status}`);
+        }
         return await response.text();
     }
 
     /**
-     * Fetches the JSON content for a lesson's quiz/flashcards.
-     * @param {string} path - The full path to the JSON file.
-     * @returns {Promise<Object>} The parsed JSON object.
+     * Fetches and parses a JSON file from the repository.
+     * @param {string} filePath - The path to the file from the repo root.
+     * @returns {Promise<Object>} - The parsed JSON object.
      */
-    async getJsonFile(path) {
-        const content = await this.getRawFile(path);
-        return JSON.parse(content);
+    async getJsonFile(filePath) {
+        const textContent = await this.getRawFile(filePath);
+        return JSON.parse(textContent);
     }
 }
